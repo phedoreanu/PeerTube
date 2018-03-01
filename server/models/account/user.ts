@@ -1,12 +1,30 @@
 import * as Sequelize from 'sequelize'
 import {
-  AllowNull, BeforeCreate, BeforeUpdate, Column, CreatedAt, DataType, Default, DefaultScope, HasMany, HasOne, Is, IsEmail, Model,
-  Scopes, Table, UpdatedAt
+  AllowNull,
+  BeforeCreate,
+  BeforeUpdate,
+  Column,
+  CreatedAt,
+  DataType,
+  Default,
+  DefaultScope,
+  HasMany,
+  HasOne,
+  Is,
+  IsEmail,
+  Model,
+  Scopes,
+  Table,
+  UpdatedAt
 } from 'sequelize-typescript'
 import { hasUserRight, USER_ROLE_LABELS, UserRight } from '../../../shared'
 import { User, UserRole } from '../../../shared/models/users'
 import {
-  isUserAutoPlayVideoValid, isUserDisplayNSFWValid, isUserPasswordValid, isUserRoleValid, isUserUsernameValid,
+  isUserAutoPlayVideoValid,
+  isUserDisplayNSFWValid,
+  isUserPasswordValid,
+  isUserRoleValid,
+  isUserUsernameValid,
   isUserVideoQuotaValid
 } from '../../helpers/custom-validators/users'
 import { comparePassword, cryptPassword } from '../../helpers/peertube-crypto'
@@ -224,6 +242,14 @@ export class UserModel extends Model<UserModel> {
 
         return parseInt(total, 10)
       })
+  }
+
+  static async getStats () {
+    const totalUsers = await UserModel.count()
+
+    return {
+      totalUsers
+    }
   }
 
   hasRight (right: UserRight) {

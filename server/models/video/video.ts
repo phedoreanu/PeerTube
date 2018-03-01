@@ -42,7 +42,7 @@ import {
   isVideoNameValid,
   isVideoPrivacyValid, isVideoSupportValid
 } from '../../helpers/custom-validators/videos'
-import { generateImageFromVideoFile, getVideoFileHeight, transcode } from '../../helpers/ffmpeg-utils'
+import { generateImageFromVideoFile, getVideoFileResolution, transcode } from '../../helpers/ffmpeg-utils'
 import { logger } from '../../helpers/logger'
 import { getServerActor } from '../../helpers/utils'
 import {
@@ -761,6 +761,29 @@ export class VideoModel extends Model<VideoModel> {
       .findOne(options)
   }
 
+  static async getStats () {
+    const totalLocalVideos = await VideoModel.count({
+      where: {
+        remote: false
+      }
+    })
+    const totalVideos = await VideoModel.count()
+
+    let totalLocalVideoViews = await VideoModel.sum('views', {
+      where: {
+        remote: false
+      }
+    })
+    // Sequelize could return null...
+    if (!totalLocalVideoViews) totalLocalVideoViews = 0
+
+    return {
+      totalLocalVideos,
+      totalLocalVideoViews,
+      totalVideos
+    }
+  }
+
   getOriginalFile () {
     if (Array.isArray(this.VideoFiles) === false) return undefined
 
@@ -793,24 +816,20 @@ export class VideoModel extends Model<VideoModel> {
   }
 
   createPreview (videoFile: VideoFileModel) {
-    const imageSize = PREVIEWS_SIZE.width + 'x' + PREVIEWS_SIZE.height
-
     return generateImageFromVideoFile(
       this.getVideoFilePath(videoFile),
       CONFIG.STORAGE.PREVIEWS_DIR,
       this.getPreviewName(),
-      imageSize
+      PREVIEWS_SIZE
     )
   }
 
   createThumbnail (videoFile: VideoFileModel) {
-    const imageSize = THUMBNAILS_SIZE.width + 'x' + THUMBNAILS_SIZE.height
-
     return generateImageFromVideoFile(
       this.getVideoFilePath(videoFile),
       CONFIG.STORAGE.THUMBNAILS_DIR,
       this.getThumbnailName(),
-      imageSize
+      THUMBNAILS_SIZE
     )
   }
 
@@ -1144,7 +1163,7 @@ export class VideoModel extends Model<VideoModel> {
     }
   }
 
-  transcodeOriginalVideofile = async function (resolution: VideoResolution) {
+  transcodeOriginalVideofile = async function (resolution: VideoResolution, isPortraitMode: boolean) {
     const videosDirectory = CONFIG.STORAGE.VIDEOS_DIR
     const extname = '.mp4'
 
@@ -1162,7 +1181,8 @@ export class VideoModel extends Model<VideoModel> {
     const transcodeOptions = {
       inputPath: videoInputPath,
       outputPath: videoOutputPath,
-      resolution
+      resolution,
+      isPortraitMode
     }
 
     await transcode(transcodeOptions)
@@ -1178,10 +1198,10 @@ export class VideoModel extends Model<VideoModel> {
     this.VideoFiles.push(newVideoFile)
   }
 
-  getOriginalFileHeight () {
+  getOriginalFileResolution () {
     const originalFilePath = this.getVideoFilePath(this.getOriginalFile())
 
-    return getVideoFileHeight(originalFilePath)
+    return getVideoFileResolution(originalFilePath)
   }
 
   getDescriptionPath () {

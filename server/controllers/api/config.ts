@@ -1,8 +1,8 @@
 import * as express from 'express'
 import { omit } from 'lodash'
 import { ServerConfig, UserRight } from '../../../shared'
-import { About } from '../../../shared/models/config/about.model'
-import { CustomConfig } from '../../../shared/models/config/custom-config.model'
+import { About } from '../../../shared/models/server/about.model'
+import { CustomConfig } from '../../../shared/models/server/custom-config.model'
 import { unlinkPromise, writeFilePromise } from '../../helpers/core-utils'
 import { isSignupAllowed } from '../../helpers/utils'
 import { CONFIG, CONSTRAINTS_FIELDS, reloadConfig } from '../../initializers'
@@ -44,6 +44,7 @@ async function getConfig (req: express.Request, res: express.Response, next: exp
   const json: ServerConfig = {
     instance: {
       name: CONFIG.INSTANCE.NAME,
+      defaultClientRoute: CONFIG.INSTANCE.DEFAULT_CLIENT_ROUTE,
       customizations: {
         javascript: CONFIG.INSTANCE.CUSTOMIZATIONS.JAVASCRIPT,
         css: CONFIG.INSTANCE.CUSTOMIZATIONS.CSS
@@ -114,8 +115,11 @@ async function updateCustomConfig (req: express.Request, res: express.Response, 
   // Need to change the videoQuota key a little bit
   const toUpdateJSON = omit(toUpdate, 'videoQuota')
   toUpdateJSON.user['video_quota'] = toUpdate.user.videoQuota
+  toUpdateJSON.instance['default_client_route'] = toUpdate.instance.defaultClientRoute
+  delete toUpdate.user.videoQuota
+  delete toUpdate.instance.defaultClientRoute
 
-  await writeFilePromise(CONFIG.CUSTOM_FILE, JSON.stringify(toUpdateJSON))
+  await writeFilePromise(CONFIG.CUSTOM_FILE, JSON.stringify(toUpdateJSON, undefined, 2))
 
   reloadConfig()
 
@@ -137,6 +141,7 @@ function customConfig (): CustomConfig {
       name: CONFIG.INSTANCE.NAME,
       description: CONFIG.INSTANCE.DESCRIPTION,
       terms: CONFIG.INSTANCE.TERMS,
+      defaultClientRoute: CONFIG.INSTANCE.DEFAULT_CLIENT_ROUTE,
       customizations: {
         css: CONFIG.INSTANCE.CUSTOMIZATIONS.CSS,
         javascript: CONFIG.INSTANCE.CUSTOMIZATIONS.JAVASCRIPT

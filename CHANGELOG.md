@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.0.0-alpha.1
+
+### Features
+
+ * Add messages about privacy and P2P
+ * Add stats route
+ * Add playback setting
+
+
+## v0.0.29-alpha
+
+### BREAKING CHANGES
+
+ * Use only 1 thread for transcoding by default
+
+### Features
+
+ * Add help to JS/CSS custom configuration inputs
+ * Keep ratio in video thumbnail generation
+ * Handle video in portrait mode
+
+### Bug fixes
+
+ * Fix complete description on some videos
+ * Fix job sorting in administration
+
+
 ## v0.0.28-alpha
 
 ### BREAKING CHANGES

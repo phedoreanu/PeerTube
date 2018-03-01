@@ -1,10 +1,18 @@
 import * as ffmpeg from 'fluent-ffmpeg'
+import { join } from 'path'
 import { VideoResolution } from '../../shared/models/videos'
 import { CONFIG, MAX_VIDEO_TRANSCODING_FPS } from '../initializers'
+import { unlinkPromise } from './core-utils'
+import { processImage } from './image-utils'
+import { logger } from './logger'
 
-async function getVideoFileHeight (path: string) {
+async function getVideoFileResolution (path: string) {
   const videoStream = await getVideoFileStream(path)
-  return videoStream.height
+
+  return {
+    videoFileResolution: Math.min(videoStream.height, videoStream.width),
+    isPortraitMode: videoStream.height > videoStream.width
+  }
 }
 
 async function getVideoFileFPS (path: string) {
@@ -34,29 +42,43 @@ function getDurationFromVideoFile (path: string) {
   })
 }
 
-function generateImageFromVideoFile (fromPath: string, folder: string, imageName: string, size: string) {
+async function generateImageFromVideoFile (fromPath: string, folder: string, imageName: string, size: { width: number, height: number }) {
+  const pendingImageName = 'pending-' + imageName
+
   const options = {
-    filename: imageName,
+    filename: pendingImageName,
     count: 1,
     folder
   }
 
-  if (size !== undefined) {
-    options['size'] = size
-  }
+  const pendingImagePath = join(folder, pendingImageName)
 
-  return new Promise<string>((res, rej) => {
-    ffmpeg(fromPath)
-      .on('error', rej)
-      .on('end', () => res(imageName))
-      .thumbnail(options)
-  })
+  try {
+    await new Promise<string>((res, rej) => {
+      ffmpeg(fromPath)
+        .on('error', rej)
+        .on('end', () => res(imageName))
+        .thumbnail(options)
+    })
+
+    const destination = join(folder, imageName)
+    await processImage({ path: pendingImagePath }, destination, size)
+  } catch (err) {
+    logger.error('Cannot generate image from video %s.', fromPath, err)
+
+    try {
+      await unlinkPromise(pendingImagePath)
+    } catch (err) {
+      logger.debug('Cannot remove pending image path after generation error.', err)
+    }
+  }
 }
 
 type TranscodeOptions = {
   inputPath: string
   outputPath: string
   resolution?: VideoResolution
+  isPortraitMode?: boolean
 }
 
 function transcode (options: TranscodeOptions) {
@@ -73,7 +95,8 @@ function transcode (options: TranscodeOptions) {
     if (fps > MAX_VIDEO_TRANSCODING_FPS) command = command.withFPS(MAX_VIDEO_TRANSCODING_FPS)
 
     if (options.resolution !== undefined) {
-      const size = `?x${options.resolution}` // '?x720' for example
+      // '?x720' or '720x?' for example
+      const size = options.isPortraitMode === true ? `${options.resolution}x?` : `?x${options.resolution}`
       command = command.size(size)
     }
 
@@ -86,7 +109,7 @@ function transcode (options: TranscodeOptions) {
 // ---------------------------------------------------------------------------
 
 export {
-  getVideoFileHeight,
+  getVideoFileResolution,
   getDurationFromVideoFile,
   generateImageFromVideoFile,
   transcode,

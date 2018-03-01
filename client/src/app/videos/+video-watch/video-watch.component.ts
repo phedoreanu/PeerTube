@@ -1,9 +1,9 @@
 import { Component, ElementRef, NgZone, OnDestroy, OnInit, ViewChild } from '@angular/core'
 import { ActivatedRoute, Router } from '@angular/router'
+import { RedirectService } from '@app/core/routing/redirect.service'
 import { VideoSupportComponent } from '@app/videos/+video-watch/modal/video-support.component'
 import { MetaService } from '@ngx-meta/core'
 import { NotificationsService } from 'angular2-notifications'
-import { Observable } from 'rxjs/Observable'
 import { Subscription } from 'rxjs/Subscription'
 import * as videojs from 'video.js'
 import 'videojs-hotkeys'
@@ -26,6 +26,8 @@ import { VideoShareComponent } from './modal/video-share.component'
   styleUrls: [ './video-watch.component.scss' ]
 })
 export class VideoWatchComponent implements OnInit, OnDestroy {
+  private static LOCAL_STORAGE_PRIVACY_CONCERN_KEY = 'video-watch-privacy-concern'
+
   @ViewChild('videoDownloadModal') videoDownloadModal: VideoDownloadComponent
   @ViewChild('videoShareModal') videoShareModal: VideoShareComponent
   @ViewChild('videoReportModal') videoReportModal: VideoReportComponent
@@ -62,7 +64,8 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
     private authService: AuthService,
     private notificationsService: NotificationsService,
     private markdownService: MarkdownService,
-    private zone: NgZone
+    private zone: NgZone,
+    private redirectService: RedirectService
   ) {}
 
   get user () {
@@ -140,7 +143,7 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
                               .subscribe(
                                 status => {
                                   this.notificationsService.success('Success', `Video ${this.video.name} had been blacklisted.`)
-                                  this.router.navigate(['/videos/list'])
+                                  this.redirectService.redirectToHomepage()
                                 },
 
                                 error => this.notificationsService.error('Error', error.message)
@@ -245,7 +248,7 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
           this.notificationsService.success('Success', `Video ${this.video.name} deleted.`)
 
           // Go back to the video-list.
-          this.router.navigate([ '/videos/list' ])
+          this.redirectService.redirectToHomepage()
         },
 
         error => this.notificationsService.error('Error', error.message)
@@ -301,75 +304,77 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
                       )
   }
 
-  private onVideoFetched (video: VideoDetails) {
+  private async onVideoFetched (video: VideoDetails) {
     this.video = video
 
     this.updateOtherVideosDisplayed()
 
-    let observable
     if (this.video.isVideoNSFWForUser(this.user)) {
-      observable = this.confirmService.confirm(
+      const res = await this.confirmService.confirm(
         'This video contains mature or explicit content. Are you sure you want to watch it?',
         'Mature or explicit content'
       )
-    } else {
-      observable = Observable.of(true)
+      if (res === false) return this.redirectService.redirectToHomepage()
     }
 
-    observable.subscribe(
-      res => {
-        if (res === false) {
+    if (!this.hasAlreadyAcceptedPrivacyConcern()) {
+      const res = await this.confirmService.confirm(
+        'PeerTube uses P2P, other may know you are watching that video through your public IP address. ' +
+        'Are you okay with that?',
+        'Privacy concern',
+        'I accept!'
+      )
+      if (res === false) return this.redirectService.redirectToHomepage()
+    }
 
-          return this.router.navigate([ '/videos/list' ])
-        }
+    this.acceptedPrivacyConcern()
 
-        // Player was already loaded
-        if (this.videoPlayerLoaded !== true) {
-          this.playerElement = this.elementRef.nativeElement.querySelector('#video-element')
+    // Player was already loaded
+    if (this.videoPlayerLoaded !== true) {
+      this.playerElement = this.elementRef.nativeElement.querySelector('#video-element')
 
-          // If autoplay is true, we don't really need a poster
-          if (this.isAutoplay() === false) {
-            this.playerElement.poster = this.video.previewUrl
-          }
-
-          const videojsOptions = {
-            controls: true,
-            autoplay: this.isAutoplay(),
-            plugins: {
-              peertube: {
-                videoFiles: this.video.files,
-                playerElement: this.playerElement,
-                peerTubeLink: false,
-                videoViewUrl: this.videoService.getVideoViewUrl(this.video.uuid),
-                videoDuration: this.video.duration
-              },
-              hotkeys: {
-                enableVolumeScroll: false
-              }
-            }
-          }
-
-          this.videoPlayerLoaded = true
-
-          const self = this
-          this.zone.runOutsideAngular(() => {
-            videojs(this.playerElement, videojsOptions, function () {
-              self.player = this
-              this.on('customError', (event, data) => self.handleError(data.err))
-            })
-          })
-        } else {
-          const videoViewUrl = this.videoService.getVideoViewUrl(this.video.uuid)
-          this.player.peertube().setVideoFiles(this.video.files, videoViewUrl, this.video.duration)
-        }
-
-        this.setVideoDescriptionHTML()
-        this.setVideoLikesBarTooltipText()
-
-        this.setOpenGraphTags()
-        this.checkUserRating()
+      // If autoplay is true, we don't really need a poster
+      if (this.isAutoplay() === false) {
+        this.playerElement.poster = this.video.previewUrl
       }
-    )
+
+      const videojsOptions = {
+        controls: true,
+        autoplay: this.isAutoplay(),
+        playbackRates: [ 0.5, 1, 1.5, 2 ],
+        plugins: {
+          peertube: {
+            videoFiles: this.video.files,
+            playerElement: this.playerElement,
+            peerTubeLink: false,
+            videoViewUrl: this.videoService.getVideoViewUrl(this.video.uuid),
+            videoDuration: this.video.duration
+          },
+          hotkeys: {
+            enableVolumeScroll: false
+          }
+        }
+      }
+
+      this.videoPlayerLoaded = true
+
+      const self = this
+      this.zone.runOutsideAngular(() => {
+        videojs(this.playerElement, videojsOptions, function () {
+          self.player = this
+          this.on('customError', (event, data) => self.handleError(data.err))
+        })
+      })
+    } else {
+      const videoViewUrl = this.videoService.getVideoViewUrl(this.video.uuid)
+      this.player.peertube().setVideoFiles(this.video.files, videoViewUrl, this.video.duration)
+    }
+
+    this.setVideoDescriptionHTML()
+    this.setVideoLikesBarTooltipText()
+
+    this.setOpenGraphTags()
+    this.checkUserRating()
   }
 
   private setRating (nextRating) {
@@ -411,6 +416,9 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
 
     this.video.likes += likesToIncrement
     this.video.dislikes += dislikesToIncrement
+
+    this.video.buildLikeAndDislikePercents()
+    this.setVideoLikesBarTooltipText()
   }
 
   private updateOtherVideosDisplayed () {
@@ -446,5 +454,13 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
 
     // Be sure the autoPlay is set to false
     return this.user.autoPlayVideo !== false
+  }
+
+  private hasAlreadyAcceptedPrivacyConcern () {
+    return localStorage.getItem(VideoWatchComponent.LOCAL_STORAGE_PRIVACY_CONCERN_KEY) === 'true'
+  }
+
+  private acceptedPrivacyConcern () {
+    localStorage.setItem(VideoWatchComponent.LOCAL_STORAGE_PRIVACY_CONCERN_KEY, 'true')
   }
 }

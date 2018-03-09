@@ -49,6 +49,7 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
   shortVideoDescription: string
   videoHTMLDescription = ''
   likesBarTooltipText = ''
+  hasAlreadyAcceptedPrivacyConcern = false
 
   private otherVideos: Video[] = []
   private paramsSub: Subscription
@@ -73,6 +74,10 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit () {
+    if (localStorage.getItem(VideoWatchComponent.LOCAL_STORAGE_PRIVACY_CONCERN_KEY) === 'true') {
+      this.hasAlreadyAcceptedPrivacyConcern = true
+    }
+
     this.videoService.getVideos({ currentPage: 1, itemsPerPage: 5 }, '-createdAt')
       .subscribe(
         data => {
@@ -255,6 +260,11 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
       )
   }
 
+  acceptedPrivacyConcern () {
+    localStorage.setItem(VideoWatchComponent.LOCAL_STORAGE_PRIVACY_CONCERN_KEY, 'true')
+    this.hasAlreadyAcceptedPrivacyConcern = true
+  }
+
   private updateVideoDescription (description: string) {
     this.video.description = description
     this.setVideoDescriptionHTML()
@@ -317,18 +327,6 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
       if (res === false) return this.redirectService.redirectToHomepage()
     }
 
-    if (!this.hasAlreadyAcceptedPrivacyConcern()) {
-      const res = await this.confirmService.confirm(
-        'PeerTube uses P2P, other may know you are watching that video through your public IP address. ' +
-        'Are you okay with that?',
-        'Privacy concern',
-        'I accept!'
-      )
-      if (res === false) return this.redirectService.redirectToHomepage()
-    }
-
-    this.acceptedPrivacyConcern()
-
     // Player was already loaded
     if (this.videoPlayerLoaded !== true) {
       this.playerElement = this.elementRef.nativeElement.querySelector('#video-element')
@@ -346,13 +344,35 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
           peertube: {
             videoFiles: this.video.files,
             playerElement: this.playerElement,
-            peerTubeLink: false,
             videoViewUrl: this.videoService.getVideoViewUrl(this.video.uuid),
             videoDuration: this.video.duration
           },
           hotkeys: {
             enableVolumeScroll: false
           }
+        },
+        controlBar: {
+          children: [
+            'playToggle',
+            'currentTimeDisplay',
+            'timeDivider',
+            'durationDisplay',
+            'liveDisplay',
+
+            'flexibleWidthSpacer',
+            'progressControl',
+
+            'webTorrentButton',
+
+            'playbackRateMenuButton',
+
+            'muteToggle',
+            'volumeControl',
+
+            'resolutionMenuButton',
+
+            'fullscreenToggle'
+          ]
         }
       }
 
@@ -454,13 +474,5 @@ export class VideoWatchComponent implements OnInit, OnDestroy {
 
     // Be sure the autoPlay is set to false
     return this.user.autoPlayVideo !== false
-  }
-
-  private hasAlreadyAcceptedPrivacyConcern () {
-    return localStorage.getItem(VideoWatchComponent.LOCAL_STORAGE_PRIVACY_CONCERN_KEY) === 'true'
-  }
-
-  private acceptedPrivacyConcern () {
-    localStorage.setItem(VideoWatchComponent.LOCAL_STORAGE_PRIVACY_CONCERN_KEY, 'true')
   }
 }

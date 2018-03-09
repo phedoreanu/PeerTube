@@ -165,7 +165,12 @@ For now only on Github:
 
 ## Tools
 
- * [Import videos (YouTube, Dailymotion, Vimeo...)](/support/doc/import-videos.md)
+ * [Import videos (YouTube, Dailymotion, Vimeo...)](/support/doc/tools.md)
+ * [Upload videos from the CLI](/support/doc/tools.md)
+
+## FAQ
+
+If you have a question, please try to find the answer in the [FAQ](/FAQ.md) first.
 
 ## Architecture
 

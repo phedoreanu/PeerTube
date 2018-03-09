@@ -44,7 +44,10 @@ export class AppComponent implements OnInit {
   }
 
   ngOnInit () {
-    if (this.router.url === '/') {
+    document.getElementById('incompatible-browser').className += ' browser-ok'
+
+    const pathname = window.location.pathname
+    if (!pathname || pathname === '/') {
       this.redirectService.redirectToHomepage()
     }
 

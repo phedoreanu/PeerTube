@@ -22,7 +22,6 @@ interface VideoJSComponentInterface {
 type PeertubePluginOptions = {
   videoFiles: VideoFile[]
   playerElement: HTMLVideoElement
-  peerTubeLink: boolean
   videoViewUrl: string
   videoDuration: number
 }
@@ -112,15 +111,11 @@ class ResolutionMenuButton extends MenuButton {
   buildCSSClass () {
     return super.buildCSSClass() + ' vjs-resolution-button'
   }
-
-  dispose () {
-    this.parentNode.removeChild(this)
-  }
 }
 MenuButton.registerComponent('ResolutionMenuButton', ResolutionMenuButton)
 
 const Button: VideoJSComponentInterface = videojsUntyped.getComponent('Button')
-class PeertubeLinkButton extends Button {
+class PeerTubeLinkButton extends Button {
 
   createEl () {
     const link = document.createElement('a')
@@ -136,12 +131,8 @@ class PeertubeLinkButton extends Button {
   handleClick () {
     this.player_.pause()
   }
-
-  dispose () {
-    this.parentNode.removeChild(this)
-  }
 }
-Button.registerComponent('PeerTubeLinkButton', PeertubeLinkButton)
+Button.registerComponent('PeerTubeLinkButton', PeerTubeLinkButton)
 
 class WebTorrentButton extends Button {
   createEl () {
@@ -226,10 +217,6 @@ class WebTorrentButton extends Button {
     })
 
     return div
-  }
-
-  dispose () {
-    this.parentNode.removeChild(this)
   }
 }
 Button.registerComponent('WebTorrentButton', WebTorrentButton)
@@ -392,20 +379,6 @@ class PeerTubePlugin extends Plugin {
   }
 
   private initializePlayer (options: PeertubePluginOptions) {
-    const controlBar = this.player.controlBar
-
-    const menuButton = new ResolutionMenuButton(this.player, options)
-    const fullscreenElement = controlBar.fullscreenToggle.el()
-    controlBar.resolutionSwitcher = controlBar.el().insertBefore(menuButton.el(), fullscreenElement)
-
-    if (options.peerTubeLink === true) {
-      const peerTubeLinkButton = new PeertubeLinkButton(this.player)
-      controlBar.peerTubeLink = controlBar.el().insertBefore(peerTubeLinkButton.el(), fullscreenElement)
-    }
-
-    const webTorrentButton = new WebTorrentButton(this.player)
-    controlBar.webTorrent = controlBar.el().insertBefore(webTorrentButton.el(), controlBar.progressControl.el())
-
     if (this.autoplay === true) {
       this.updateVideoFile(undefined, () => this.player.play())
     } else {

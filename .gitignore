@@ -22,3 +22,4 @@
 /previews/
 /logs/
 support/docker/production/db/
+/server/tools/import-mediacore.ts

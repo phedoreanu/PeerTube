@@ -24,9 +24,19 @@ loadVideoInfo(videoId)
     const previewUrl = window.location.origin + videoInfo.previewPath
     videoElement.poster = previewUrl
 
+    let autoplay = false
+
+    try {
+      let params = new URL(window.location.toString()).searchParams
+      autoplay = params.has('autoplay') && (params.get('autoplay') === '1' || params.get('autoplay') === 'true')
+    } catch (err) {
+      console.error('Cannot get params from URL.', err)
+    }
+
     const videojsOptions = {
       controls: true,
-      autoplay: false,
+      autoplay,
+      inactivityTimeout: 500,
       plugins: {
         peertube: {
           videoFiles: videoInfo.files,
@@ -66,7 +76,7 @@ loadVideoInfo(videoId)
 
       player.dock({
         title: videoInfo.name,
-        description: 'Use P2P, other may know you are watching that video.'
+        description: 'Uses P2P, others may know you are watching this video.'
       })
     })
   })

@@ -16,6 +16,17 @@
   </div>
 
   <div class="form-group">
+    <label for="instanceShortDescription">Short description</label>
+    <textarea
+        id="instanceShortDescription" formControlName="instanceShortDescription"
+        [ngClass]="{ 'input-error': formErrors['instanceShortDescription'] }"
+    ></textarea>
+    <div *ngIf="formErrors.instanceShortDescription" class="form-error">
+      {{ formErrors.instanceShortDescription }}
+    </div>
+  </div>
+
+  <div class="form-group">
     <label for="instanceDescription">Description</label><my-help helpType="markdownText"></my-help>
     <my-markdown-textarea
         id="instanceDescription" formControlName="instanceDescription" textareaWidth="500px" [previewColumn]="true"
@@ -43,7 +54,11 @@
       <select id="instanceDefaultClientRoute" formControlName="instanceDefaultClientRoute">
         <option value="/videos/trending">Videos Trending</option>
         <option value="/videos/recently-added">Videos Recently Added</option>
+        <option value="/videos/local">Local videos</option>
       </select>
+    </div>
+    <div *ngIf="formErrors.instanceDefaultClientRoute" class="form-error">
+      {{ formErrors.instanceDefaultClientRoute }}
     </div>
   </div>
 
@@ -104,6 +119,9 @@
         </option>
       </select>
     </div>
+    <div *ngIf="formErrors.userVideoQuota" class="form-error">
+      {{ formErrors.userVideoQuota }}
+    </div>
   </div>
 
   <div class="inner-form-title">Transcoding</div>
@@ -125,6 +143,9 @@
             {{ transcodingThreadOption.label }}
           </option>
         </select>
+      </div>
+      <div *ngIf="formErrors.transcodingThreads" class="form-error">
+        {{ formErrors.transcodingThreads }}
       </div>
     </div>
 

@@ -2,6 +2,7 @@
 
 import * as videojs from 'video.js'
 import * as WebTorrent from 'webtorrent'
+import { VideoConstant, VideoResolution } from '../../../../shared/models/videos'
 import { VideoFile } from '../../../../shared/models/videos/video.model'
 import { renderVideo } from './video-renderer'
 
@@ -43,7 +44,21 @@ function bytes (value) {
 
 // videojs typings don't have some method we need
 const videojsUntyped = videojs as any
-const webtorrent = new WebTorrent({ dht: false })
+const webtorrent = new WebTorrent({
+  tracker: {
+    rtcConfig: {
+      iceServers: [
+        {
+          urls: 'stun:stun.stunprotocol.org'
+        },
+        {
+          urls: 'stun:stun.framasoft.org'
+        }
+      ]
+    }
+  },
+  dht: false
+})
 
 const MenuItem: VideoJSComponentInterface = videojsUntyped.getComponent('MenuItem')
 class ResolutionMenuItem extends MenuItem {
@@ -52,8 +67,8 @@ class ResolutionMenuItem extends MenuItem {
     options.selectable = true
     super(player, options)
 
-    const currentResolution = this.player_.peertube().getCurrentResolution()
-    this.selected(this.options_.id === currentResolution)
+    const currentResolutionId = this.player_.peertube().getCurrentResolutionId()
+    this.selected(this.options_.id === currentResolutionId)
   }
 
   handleClick (event) {
@@ -89,10 +104,10 @@ class ResolutionMenuButton extends MenuButton {
       menuItems.push(new ResolutionMenuItem(
         this.player_,
         {
-          id: videoFile.resolution,
-          label: videoFile.resolutionLabel,
+          id: videoFile.resolution.id,
+          label: videoFile.resolution.label,
           src: videoFile.magnetUri,
-          selected: videoFile.resolution === this.currentSelection
+          selected: videoFile.resolution.id === this.currentSelectionId
         })
       )
     }
@@ -255,7 +270,7 @@ class PeerTubePlugin extends Plugin {
     this.playerElement = options.playerElement
 
     this.player.ready(() => {
-      this.initializePlayer(options)
+      this.initializePlayer()
       this.runTorrentInfoScheduler()
       this.runViewAdd()
     })
@@ -269,12 +284,12 @@ class PeerTubePlugin extends Plugin {
     this.flushVideoFile(this.currentVideoFile, false)
   }
 
-  getCurrentResolution () {
-    return this.currentVideoFile ? this.currentVideoFile.resolution : -1
+  getCurrentResolutionId () {
+    return this.currentVideoFile ? this.currentVideoFile.resolution.id : -1
   }
 
   getCurrentResolutionLabel () {
-    return this.currentVideoFile ? this.currentVideoFile.resolutionLabel : ''
+    return this.currentVideoFile ? this.currentVideoFile.resolution.label : ''
   }
 
   updateVideoFile (videoFile?: VideoFile, done?: () => void) {
@@ -301,17 +316,25 @@ class PeerTubePlugin extends Plugin {
     const previousVideoFile = this.currentVideoFile
     this.currentVideoFile = videoFile
 
-    console.log('Adding ' + videoFile.magnetUri + '.')
-    this.torrent = webtorrent.add(videoFile.magnetUri, torrent => {
-      console.log('Added ' + videoFile.magnetUri + '.')
+    this.addTorrent(this.currentVideoFile.magnetUri, previousVideoFile, done)
+
+    this.trigger('videoFileUpdate')
+  }
+
+  addTorrent (magnetOrTorrentUrl: string, previousVideoFile: VideoFile, done: Function) {
+    console.log('Adding ' + magnetOrTorrentUrl + '.')
+
+    this.torrent = webtorrent.add(magnetOrTorrentUrl, torrent => {
+      console.log('Added ' + magnetOrTorrentUrl + '.')
 
       this.flushVideoFile(previousVideoFile)
 
       const options = { autoplay: true, controls: true }
       renderVideo(torrent.files[0], this.playerElement, options,(err, renderer) => {
+        this.renderer = renderer
+
         if (err) return this.fallbackToHttp()
 
-        this.renderer = renderer
         if (!this.player.paused()) {
           const playPromise = this.player.play()
           if (playPromise !== undefined) return playPromise.then(done)
@@ -324,22 +347,28 @@ class PeerTubePlugin extends Plugin {
     })
 
     this.torrent.on('error', err => this.handleError(err))
+
     this.torrent.on('warning', (err: any) => {
       // We don't support HTTP tracker but we don't care -> we use the web socket tracker
       if (err.message.indexOf('Unsupported tracker protocol') !== -1) return
+
       // Users don't care about issues with WebRTC, but developers do so log it in the console
       if (err.message.indexOf('Ice connection failed') !== -1) {
         console.error(err)
         return
       }
 
+      // Magnet hash is not up to date with the torrent file, add directly the torrent file
+      if (err.message.indexOf('incorrect info hash') !== -1) {
+        console.error('Incorrect info hash detected, falling back to torrent file.')
+        return this.addTorrent(this.torrent['xs'], previousVideoFile, done)
+      }
+
       return this.handleError(err)
     })
-
-    this.trigger('videoFileUpdate')
   }
 
-  updateResolution (resolution) {
+  updateResolution (resolutionId: number) {
     // Remember player state
     const currentTime = this.player.currentTime()
     const isPaused = this.player.paused()
@@ -352,7 +381,7 @@ class PeerTubePlugin extends Plugin {
       this.player.bigPlayButton.hide()
     }
 
-    const newVideoFile = this.videoFiles.find(f => f.resolution === resolution)
+    const newVideoFile = this.videoFiles.find(f => f.resolution.id === resolutionId)
     this.updateVideoFile(newVideoFile, () => {
       this.player.currentTime(currentTime)
       this.player.handleTechSeeked_()
@@ -378,7 +407,7 @@ class PeerTubePlugin extends Plugin {
     this.updateVideoFile(undefined, () => this.player.play())
   }
 
-  private initializePlayer (options: PeertubePluginOptions) {
+  private initializePlayer () {
     if (this.autoplay === true) {
       this.updateVideoFile(undefined, () => this.player.play())
     } else {
